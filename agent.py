@@ -11,9 +11,11 @@ import json
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
+from tavily import TavilyClient
 
 load_dotenv()
 client = OpenAI()
+tavily = TavilyClient()
 
 # ============================================================
 # PART 1: DEFINE YOUR TOOLS
@@ -23,18 +25,15 @@ client = OpenAI()
 # 2. A schema that tells the AI what the tool does and what inputs it needs
 
 def search_web(query: str) -> str:
-    """Simulate a web search. In production, you'd hit a real API."""
-    fake_results = {
-        "weather": "Current weather in Tel Aviv: 18°C, partly cloudy.",
-        "python": "Python is a programming language created by Guido van Rossum in 1991.",
-        "agents": "AI agents are autonomous systems that can perceive, decide, and act to achieve goals.",
-        "openai": "OpenAI is an AI research company founded in 2015. They created GPT-4 and ChatGPT.",
-        "default": f"Search results for '{query}': Found 3 articles discussing this topic with varying perspectives."
-    }
-    for key in fake_results:
-        if key in query.lower():
-            return fake_results[key]
-    return fake_results["default"]
+    """Search the web using Tavily."""
+    try:
+        response = tavily.search(query=query, max_results=3)
+        results = []
+        for result in response['results']:
+            results.append(f"- {result['title']}: {result['content'][:200]}")
+        return "\n".join(results) if results else "No results found."
+    except Exception as e:
+        return f"Search error: {str(e)}"
 
 
 def read_file(filepath: str) -> str:
@@ -59,12 +58,21 @@ def calculate(expression: str) -> str:
     except Exception as e:
         return f"Error calculating: {str(e)}"
 
+def write_file(filepath: str, content: str) -> str:
+    """Write content to a file."""
+    try:
+        with open(filepath, 'w') as f:
+            f.write(content)
+        return f"Successfully wrote to '{filepath}'"
+    except Exception as e:
+        return f"Error writing file: {str(e)}"
 
 # Map tool names to functions
 TOOL_FUNCTIONS = {
     "search_web": search_web,
     "read_file": read_file,
     "calculate": calculate,
+    "write_file": write_file,
 }
 
 # ============================================================
@@ -122,6 +130,27 @@ TOOLS = [
                     }
                 },
                 "required": ["expression"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Write content to a file. Use this when you need to save information, create notes, or store results.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filepath": {
+                        "type": "string",
+                        "description": "Path to the file to create or overwrite"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The content to write to the file"
+                    }
+                },
+                "required": ["filepath", "content"]
             }
         }
     }
